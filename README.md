@@ -1,2 +1,5 @@
 # causal
-A simple implementation of a generic causal tree.
+
+> Very much a WIP.. more to come shortly!
+
+Causal is a CRDT implementation playground.
