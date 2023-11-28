@@ -84,6 +84,30 @@ func TestTree_SimpleConflict(t *testing.T) {
 	assert(t, treeString(tree2), "Hi CodersWorld")
 }
 
+func TestTree_Removal(t *testing.T) {
+	tree := New[rune](0)
+	tree.AddSequence(nil, []rune("Hello World"))
+
+	// Remove the 'H'.
+	tree.RemoveNode(ID{
+		Timestamp: 1,
+		EntityID:  tree.ID.EntityID,
+	})
+
+	// Remove ' World'
+	for i := 0; i < 6; i++ {
+		tree.RemoveNode(ID{
+			Timestamp: tree.ID.Timestamp - i,
+			EntityID:  tree.ID.EntityID,
+		})
+	}
+
+	// Add ' there' to the end of the tree.
+	tree.AddSequence(&tree.ID, []rune(" there"))
+
+	assert(t, treeString(tree), "ello there")
+}
+
 func treeString(tree *Tree[rune]) string {
 	var sb strings.Builder
 	for _, node := range tree.OrderedNodes() {

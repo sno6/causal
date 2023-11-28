@@ -8,8 +8,6 @@ import (
 	"sort"
 )
 
-// TODO: Implement tombstone deletion.
-
 // An ID is a Lamport timestamp and a unique identifier.
 //
 // The EntityID should be unique across trees, think of it
@@ -26,6 +24,7 @@ type ID struct {
 type Node[T any] struct {
 	ID       ID
 	V        T
+	Removed  bool
 	Parent   *Node[T]
 	Children []*Node[T]
 }
@@ -94,13 +93,23 @@ func (t *Tree[T]) IncrTimestamp() ID {
 	return t.ID
 }
 
+func (t *Tree[T]) RemoveNode(id ID) {
+	node := t.Find(id)
+	if node == nil {
+		return
+	}
+	node.Removed = true
+}
+
 // OrderedNodes returns all the tree's nodes in depth-first pre-order.
 // A partial ordering is turned into a total order by ordering sibling branches
 // by node ID and then EntityID (secondary).
 func (t *Tree[T]) OrderedNodes() []*Node[T] {
 	var nodes []*Node[T]
 	t.traverseFunc(t.Root, func(n *Node[T]) {
-		nodes = append(nodes, n)
+		if !n.Removed {
+			nodes = append(nodes, n)
+		}
 	})
 	return nodes
 }
