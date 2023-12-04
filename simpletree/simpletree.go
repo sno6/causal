@@ -43,8 +43,14 @@ type Tree[T any] struct {
 func New[T any](entityID int) *Tree[T] {
 	return &Tree[T]{
 		ID: ID{
-			Timestamp: 0,
+			Timestamp: 1,
 			EntityID:  entityID,
+		},
+		Root: &Node[T]{
+			ID: ID{
+				Timestamp: 0,
+				EntityID:  entityID,
+			},
 		},
 	}
 }
@@ -59,31 +65,18 @@ func (t *Tree[T]) AddSequence(parentID *ID, seq []T) *ID {
 // AddNode finds the parent/causing node by parentID
 // and then adds a new node as a child of that parent.
 func (t *Tree[T]) AddNode(parentID *ID, v T) *ID {
-	// The only case for adding a Node without a parent is if we're adding a root Node.
-	if parentID == nil && t.Root != nil {
-		panic("nil parent for non-root node")
-	}
-
-	var parent *Node[T]
+	parent := t.Root
 	if parentID != nil {
 		parent = t.Find(*parentID)
 	}
 
-	if parent == nil {
-		// This is our Tree's root now.
-		t.Root = &Node[T]{
-			ID: t.IncrTimestamp(),
-			V:  v,
-		}
-	} else {
-		// We just add Nodes in the order they come in.
-		// To get the correct ordering of Nodes call OrderedNodes.
-		parent.Children = append(parent.Children, &Node[T]{
-			ID:     t.IncrTimestamp(),
-			V:      v,
-			Parent: parent,
-		})
-	}
+	// We just add Nodes in the order they come in.
+	// To get the correct ordering of Nodes call OrderedNodes.
+	parent.Children = append(parent.Children, &Node[T]{
+		ID:     t.IncrTimestamp(),
+		V:      v,
+		Parent: parent,
+	})
 
 	return &t.ID
 }
@@ -104,14 +97,15 @@ func (t *Tree[T]) RemoveNode(id ID) {
 // OrderedNodes returns all the tree's nodes in depth-first pre-order.
 // A partial ordering is turned into a total order by ordering sibling branches
 // by node ID and then EntityID (secondary).
-func (t *Tree[T]) OrderedNodes() []*Node[T] {
+func (t *Tree[T]) OrderedNodes(includeRemoved bool) []*Node[T] {
 	var nodes []*Node[T]
 	t.traverseFunc(t.Root, func(n *Node[T]) {
-		if !n.Removed {
-			nodes = append(nodes, n)
+		if n.Removed && includeRemoved == false {
+			return
 		}
+		nodes = append(nodes, n)
 	})
-	return nodes
+	return nodes[1:] // Don't return "root" placeholder node.
 }
 
 func (t *Tree[T]) traverseFunc(current *Node[T], f func(*Node[T])) {
@@ -136,27 +130,29 @@ func (t *Tree[T]) Merge(src *Tree[T]) {
 	// (or have seen) then we need to keep track of that.
 	t.ID.Timestamp = max(src.ID.Timestamp, t.ID.Timestamp)
 
-	// Don't need to copy Children because they will be
-	// added below, referencing Root as their parent.
-	if t.Root == nil {
-		t.Root = &Node[T]{
-			ID:       src.Root.ID,
-			V:        src.Root.V,
-			Parent:   nil,
-			Children: nil,
-		}
-	}
-
-	for _, n := range src.OrderedNodes() {
-		// We've already got this Node in the tree.
+	for _, n := range src.OrderedNodes(true) {
 		if t.Exists(n.ID) {
+			// If we have a common node make sure that they both
+			// share the same attributes, such as being removed.
+			ours := t.Find(n.ID)
+			if n.Removed && !ours.Removed {
+				t.RemoveNode(n.ID)
+			}
+
 			continue
 		}
-		if !t.Exists(n.Parent.ID) {
+
+		var parentID ID
+		if n.Parent != nil {
+			parentID = n.Parent.ID
+		}
+
+		// src root has a nil parent.
+		if !t.Exists(parentID) {
 			panic("parent should exist for Node to be added")
 		}
 
-		parent := t.Find(n.Parent.ID)
+		parent := t.Find(parentID)
 		if parent == nil {
 			panic("parent should exist for Node to be added")
 		}
@@ -164,12 +160,20 @@ func (t *Tree[T]) Merge(src *Tree[T]) {
 			ID:       n.ID,
 			V:        n.V,
 			Parent:   parent,
+			Removed:  n.Removed,
 			Children: nil,
 		})
 	}
 }
 
+func (id ID) IsRoot() bool {
+	return id.Timestamp == 0
+}
+
 func (t *Tree[T]) Exists(id ID) bool {
+	if id.IsRoot() {
+		return true
+	}
 	var exists bool
 	t.traverseFunc(t.Root, func(n *Node[T]) {
 		if !exists && n.ID.Equals(id) {
@@ -180,6 +184,9 @@ func (t *Tree[T]) Exists(id ID) bool {
 }
 
 func (t *Tree[T]) Find(id ID) *Node[T] {
+	if id.IsRoot() {
+		return t.Root
+	}
 	var node *Node[T]
 	t.traverseFunc(t.Root, func(n *Node[T]) {
 		if node == nil && n.ID.Equals(id) {

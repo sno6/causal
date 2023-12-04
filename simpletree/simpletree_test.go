@@ -90,7 +90,7 @@ func TestTree_Removal(t *testing.T) {
 
 	// Remove the 'H'.
 	tree.RemoveNode(ID{
-		Timestamp: 1,
+		Timestamp: 2,
 		EntityID:  tree.ID.EntityID,
 	})
 
@@ -105,12 +105,46 @@ func TestTree_Removal(t *testing.T) {
 	// Add ' there' to the end of the tree.
 	tree.AddSequence(&tree.ID, []rune(" there"))
 
-	assert(t, treeString(tree), "ello there")
+	assert(t, "ello there", treeString(tree))
+}
+
+func TestTree_MergeWithNonNullRoots(t *testing.T) {
+	t1 := New[rune](0)
+	t1.AddSequence(nil, []rune("hi there"))
+
+	t2 := New[rune](1)
+	t2.AddSequence(nil, []rune("bye there"))
+
+	t1.Merge(t2)
+	t2.Merge(t1)
+}
+
+func TestTree_MergeWithDeletes(t *testing.T) {
+	t1 := New[rune](0)
+	t1.AddSequence(nil, []rune("hi there"))
+
+	t2 := New[rune](1)
+	t2.AddSequence(nil, []rune("bye there"))
+
+	// Remove the 'e'
+	t2.RemoveNode(ID{
+		Timestamp: 10,
+		EntityID:  t2.ID.EntityID,
+	})
+
+	t1.Merge(t2)
+	t2.Merge(t1)
+
+	assert(t, treeString(t1), treeString(t2))
+	assert(t, "bye therhi there", treeString(t1))
 }
 
 func treeString(tree *Tree[rune]) string {
 	var sb strings.Builder
-	for _, node := range tree.OrderedNodes() {
+	for _, node := range tree.OrderedNodes(false) {
+		if node.Removed {
+			panic("wtf")
+		}
 		sb.WriteRune(node.V)
 	}
 	return sb.String()

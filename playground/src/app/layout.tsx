@@ -16,6 +16,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+          <script src="/wasm_exec.js" async></script>
+      </head>
       <body className={inter.className}>{children}</body>
     </html>
   )
